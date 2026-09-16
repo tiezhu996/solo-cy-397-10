@@ -57,6 +57,7 @@ mvn spring-boot:run
 - `POST /api/tickets/{id}/replies` 添加工单回复
 - `GET /api/tickets/{id}` 工单详情（含当前处理人）
 - `GET /api/tickets/todo?assigneeId=` 处理人待办列表
+- `POST /api/tickets/{id}/assignee` 指定首任处理人（仅无负责人且未关闭的工单，仅一次）
 - `POST /api/tickets/{id}/transfers` 发起工单转派
 - `POST /api/tickets/{id}/transfers/accept` 接手工单转派
 - `GET /api/tickets/{id}/transfers` 转派记录回读

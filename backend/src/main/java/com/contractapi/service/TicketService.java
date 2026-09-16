@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.contractapi.constants.ErrorCode;
 import com.contractapi.constants.TicketStatus;
 import com.contractapi.constants.TransferStatus;
+import com.contractapi.dto.AssigneeRequest;
 import com.contractapi.dto.TicketRequest;
 import com.contractapi.dto.TransferAcceptRequest;
 import com.contractapi.dto.TransferRequest;
@@ -67,6 +68,21 @@ public class TicketService {
   public synchronized List<TicketTransfer> listTransfers(Long ticketId) {
     requireTicket(ticketId);
     return transfers.stream().filter(item -> item.getTicketId().equals(ticketId)).toList();
+  }
+
+  public synchronized LegalTicket designateAssignee(Long ticketId, AssigneeRequest request) {
+    LegalTicket ticket = requireTicket(ticketId);
+    if (request.assigneeId() == null) {
+      throw new ApiException(ErrorCode.VALIDATION_FAILED, "缺少处理人身份");
+    }
+    if (TicketStatus.CLOSED.name().equals(ticket.getStatus())) {
+      throw new ApiException(ErrorCode.TICKET_CLOSED, "工单已关闭，无法指定处理人");
+    }
+    if (ticket.getAssigneeId() != null) {
+      throw new ApiException(ErrorCode.ASSIGNEE_ALREADY_EXISTS, "工单已有处理人，不能重复指定");
+    }
+    ticket.setAssigneeId(request.assigneeId());
+    return ticket;
   }
 
   public synchronized TicketTransfer initiateTransfer(Long ticketId, TransferRequest request) {

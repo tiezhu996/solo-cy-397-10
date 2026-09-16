@@ -9,5 +9,6 @@ public final class ErrorCode {
   public static final String TRANSFER_ALREADY_PENDING = "TRANSFER_ALREADY_PENDING";
   public static final String NOT_CURRENT_ASSIGNEE = "NOT_CURRENT_ASSIGNEE";
   public static final String NOT_TRANSFER_TARGET = "NOT_TRANSFER_TARGET";
+  public static final String ASSIGNEE_ALREADY_EXISTS = "ASSIGNEE_ALREADY_EXISTS";
   private ErrorCode() {}
 }

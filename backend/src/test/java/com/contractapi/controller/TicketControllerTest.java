@@ -97,6 +97,40 @@ class TicketControllerTest {
   }
 
   @Test
+  void designateFirstAssigneeOverHttp() throws Exception {
+    long ticketId = createTicket(null);
+
+    // 空身份指定：明确失败
+    mockMvc.perform(post("/api/tickets/{id}/assignee", ticketId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+    // 首任处理人指定成功，待办只增加一次
+    mockMvc.perform(post("/api/tickets/{id}/assignee", ticketId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"assigneeId\":10}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.assigneeId").value(10));
+    mockMvc.perform(get("/api/tickets/todo").param("assigneeId", "10"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
+
+    // 重复指定：失败且不覆盖已有归属
+    mockMvc.perform(post("/api/tickets/{id}/assignee", ticketId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"assigneeId\":20}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("ASSIGNEE_ALREADY_EXISTS"));
+    mockMvc.perform(get("/api/tickets/{id}", ticketId))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeId").value(10));
+    mockMvc.perform(get("/api/tickets/todo").param("assigneeId", "10"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
+    mockMvc.perform(get("/api/tickets/todo").param("assigneeId", "20"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(0)));
+  }
+
+  @Test
   void missingIdentityRequestsFailWithoutSideEffects() throws Exception {
     long ticketId = createTicket(10L);
 

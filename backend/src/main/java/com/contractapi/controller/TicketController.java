@@ -3,6 +3,7 @@ package com.contractapi.controller;
 import java.util.List;
 import java.util.Map;
 import com.contractapi.constants.TicketStatus;
+import com.contractapi.dto.AssigneeRequest;
 import com.contractapi.dto.TicketRequest;
 import com.contractapi.dto.TransferAcceptRequest;
 import com.contractapi.dto.TransferRequest;
@@ -21,6 +22,7 @@ public class TicketController {
   @GetMapping("/todo") public List<LegalTicket> todo(@RequestParam Long assigneeId) { return service.todo(assigneeId); }
   @PatchMapping("/{id}/status") public LegalTicket status(@PathVariable Long id, @RequestParam TicketStatus status) { return service.updateStatus(id, status); }
   @PostMapping("/{id}/replies") public Map<String, Object> reply(@PathVariable Long id, @RequestBody Map<String, Object> body) { return service.reply(id, String.valueOf(body.get("content")), (List<String>) body.getOrDefault("attachments", List.of())); }
+  @PostMapping("/{id}/assignee") public LegalTicket assignee(@PathVariable Long id, @RequestBody AssigneeRequest request) { return service.designateAssignee(id, request); }
   @PostMapping("/{id}/transfers") public TicketTransfer transfer(@PathVariable Long id, @RequestBody TransferRequest request) { return service.initiateTransfer(id, request); }
   @PostMapping("/{id}/transfers/accept") public TicketTransfer accept(@PathVariable Long id, @RequestBody TransferAcceptRequest request) { return service.acceptTransfer(id, request); }
   @GetMapping("/{id}/transfers") public List<TicketTransfer> transfers(@PathVariable Long id) { return service.listTransfers(id); }

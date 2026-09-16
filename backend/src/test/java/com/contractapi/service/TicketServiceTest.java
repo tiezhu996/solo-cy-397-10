@@ -17,6 +17,7 @@ import com.contractapi.constants.ErrorCode;
 import com.contractapi.constants.TicketStatus;
 import com.contractapi.constants.TicketType;
 import com.contractapi.constants.TransferStatus;
+import com.contractapi.dto.AssigneeRequest;
 import com.contractapi.dto.TicketRequest;
 import com.contractapi.dto.TransferAcceptRequest;
 import com.contractapi.dto.TransferRequest;
@@ -86,6 +87,117 @@ class TicketServiceTest {
         () -> service.initiateTransfer(ticket.getId(), new TransferRequest(10L, 30L)));
     assertEquals(ErrorCode.TRANSFER_ALREADY_PENDING, conflict.getCode());
     assertEquals(1, service.listTransfers(ticket.getId()).size());
+  }
+
+  @Test
+  void designateFirstAssigneeSucceedsOnce() {
+    LegalTicket ticket = newTicket(null);
+    assertEquals(0, service.todo(10L).size());
+
+    LegalTicket designated = service.designateAssignee(ticket.getId(), new AssigneeRequest(10L));
+    assertEquals(10L, designated.getAssigneeId());
+    assertEquals(1, service.todo(10L).size());
+
+    // 重复指定（同人/不同人）均失败，不覆盖已有归属，待办不再增加
+    ApiException same = assertThrows(ApiException.class,
+        () -> service.designateAssignee(ticket.getId(), new AssigneeRequest(10L)));
+    assertEquals(ErrorCode.ASSIGNEE_ALREADY_EXISTS, same.getCode());
+    ApiException other = assertThrows(ApiException.class,
+        () -> service.designateAssignee(ticket.getId(), new AssigneeRequest(20L)));
+    assertEquals(ErrorCode.ASSIGNEE_ALREADY_EXISTS, other.getCode());
+    assertEquals(10L, service.find(ticket.getId()).getAssigneeId());
+    assertEquals(1, service.todo(10L).size());
+    assertEquals(0, service.todo(20L).size());
+  }
+
+  @Test
+  void designateRequiresIdentity() {
+    LegalTicket ticket = newTicket(null);
+    ApiException ex = assertThrows(ApiException.class,
+        () -> service.designateAssignee(ticket.getId(), new AssigneeRequest(null)));
+    assertEquals(ErrorCode.VALIDATION_FAILED, ex.getCode());
+    assertNull(service.find(ticket.getId()).getAssigneeId());
+  }
+
+  @Test
+  void designateOnClosedTicketFails() {
+    LegalTicket ticket = newTicket(null);
+    service.updateStatus(ticket.getId(), TicketStatus.CLOSED);
+    ApiException ex = assertThrows(ApiException.class,
+        () -> service.designateAssignee(ticket.getId(), new AssigneeRequest(10L)));
+    assertEquals(ErrorCode.TICKET_CLOSED, ex.getCode());
+    assertNull(service.find(ticket.getId()).getAssigneeId());
+    assertEquals(0, service.todo(10L).size());
+  }
+
+  @Test
+  void designateOnOwnedTicketFails() {
+    LegalTicket created = newTicket(10L);
+    ApiException ex = assertThrows(ApiException.class,
+        () -> service.designateAssignee(created.getId(), new AssigneeRequest(20L)));
+    assertEquals(ErrorCode.ASSIGNEE_ALREADY_EXISTS, ex.getCode());
+    assertEquals(10L, service.find(created.getId()).getAssigneeId());
+
+    // 转派接手后的归属同样不可被指定覆盖
+    LegalTicket transferred = newTicket(null);
+    service.designateAssignee(transferred.getId(), new AssigneeRequest(10L));
+    service.initiateTransfer(transferred.getId(), new TransferRequest(10L, 20L));
+    service.acceptTransfer(transferred.getId(), new TransferAcceptRequest(20L));
+    ApiException afterAccept = assertThrows(ApiException.class,
+        () -> service.designateAssignee(transferred.getId(), new AssigneeRequest(30L)));
+    assertEquals(ErrorCode.ASSIGNEE_ALREADY_EXISTS, afterAccept.getCode());
+    assertEquals(20L, service.find(transferred.getId()).getAssigneeId());
+  }
+
+  @Test
+  void designatedTicketTransfersNormally() {
+    LegalTicket ticket = newTicket(null);
+    service.designateAssignee(ticket.getId(), new AssigneeRequest(10L));
+    service.initiateTransfer(ticket.getId(), new TransferRequest(10L, 20L));
+    service.acceptTransfer(ticket.getId(), new TransferAcceptRequest(20L));
+    assertEquals(20L, service.find(ticket.getId()).getAssigneeId());
+    assertEquals(0, service.todo(10L).size());
+    assertEquals(1, service.todo(20L).size());
+  }
+
+  @Test
+  void concurrentDesignateYieldsSingleWinner() throws Exception {
+    LegalTicket ticket = newTicket(null);
+    int threads = 8;
+    ExecutorService pool = Executors.newFixedThreadPool(threads);
+    CountDownLatch start = new CountDownLatch(1);
+    List<Object> outcomes = new java.util.concurrent.CopyOnWriteArrayList<>();
+    for (int i = 0; i < threads; i++) {
+      long candidate = 100L + i;
+      pool.submit(() -> {
+        try {
+          start.await();
+          outcomes.add(service.designateAssignee(ticket.getId(), new AssigneeRequest(candidate)));
+        } catch (ApiException e) {
+          outcomes.add(e);
+        }
+        return null;
+      });
+    }
+    start.countDown();
+    pool.shutdown();
+    assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS));
+
+    List<LegalTicket> successes = outcomes.stream().filter(LegalTicket.class::isInstance).map(LegalTicket.class::cast).toList();
+    List<ApiException> failures = outcomes.stream().filter(ApiException.class::isInstance).map(ApiException.class::cast).toList();
+    assertEquals(1, successes.size());
+    assertEquals(threads - 1, failures.size());
+    assertTrue(failures.stream().allMatch(e -> ErrorCode.ASSIGNEE_ALREADY_EXISTS.equals(e.getCode())));
+
+    // 失败方不留记录也不留待办：全部候选人中只有胜者的待办包含该工单
+    Long winner = successes.get(0).getAssigneeId();
+    assertEquals(winner, service.find(ticket.getId()).getAssigneeId());
+    long holders = 0;
+    for (int i = 0; i < threads; i++) {
+      holders += service.todo(100L + i).size();
+    }
+    assertEquals(1, holders);
+    assertEquals(0, service.listTransfers(ticket.getId()).size());
   }
 
   @Test
