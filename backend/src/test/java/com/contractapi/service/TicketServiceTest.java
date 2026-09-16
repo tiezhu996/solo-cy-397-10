@@ -89,6 +89,51 @@ class TicketServiceTest {
   }
 
   @Test
+  void initiateWithoutCurrentAssigneeFails() {
+    LegalTicket ticket = newTicket(10L);
+    ApiException ex = assertThrows(ApiException.class,
+        () -> service.initiateTransfer(ticket.getId(), new TransferRequest(null, 20L)));
+    assertEquals(ErrorCode.VALIDATION_FAILED, ex.getCode());
+    // 不新增转派记录，责任人与待办不变
+    assertEquals(0, service.listTransfers(ticket.getId()).size());
+    assertEquals(10L, service.find(ticket.getId()).getAssigneeId());
+    assertEquals(1, service.todo(10L).size());
+    assertEquals(0, service.todo(20L).size());
+  }
+
+  @Test
+  void acceptWithoutAssigneeIdentityFails() {
+    LegalTicket ticket = newTicket(10L);
+    service.initiateTransfer(ticket.getId(), new TransferRequest(10L, 20L));
+    ApiException ex = assertThrows(ApiException.class,
+        () -> service.acceptTransfer(ticket.getId(), new TransferAcceptRequest(null)));
+    assertEquals(ErrorCode.VALIDATION_FAILED, ex.getCode());
+    // 待接手记录保持原样，责任人与待办不变
+    List<TicketTransfer> records = service.listTransfers(ticket.getId());
+    assertEquals(1, records.size());
+    assertEquals(TransferStatus.PENDING.name(), records.get(0).getStatus());
+    assertNull(records.get(0).getAcceptedAt());
+    assertEquals(10L, service.find(ticket.getId()).getAssigneeId());
+    assertEquals(1, service.todo(10L).size());
+    assertEquals(0, service.todo(20L).size());
+  }
+
+  @Test
+  void duplicateAcceptWithoutIdentityFails() {
+    LegalTicket ticket = newTicket(10L);
+    service.initiateTransfer(ticket.getId(), new TransferRequest(10L, 20L));
+    TicketTransfer accepted = service.acceptTransfer(ticket.getId(), new TransferAcceptRequest(20L));
+
+    ApiException ex = assertThrows(ApiException.class,
+        () -> service.acceptTransfer(ticket.getId(), new TransferAcceptRequest(null)));
+    assertEquals(ErrorCode.VALIDATION_FAILED, ex.getCode());
+    // 已完成归属不被改动，正确身份的重复接手仍幂等
+    assertEquals(20L, service.find(ticket.getId()).getAssigneeId());
+    assertEquals(accepted.getId(), service.acceptTransfer(ticket.getId(), new TransferAcceptRequest(20L)).getId());
+    assertEquals(1, service.listTransfers(ticket.getId()).size());
+  }
+
+  @Test
   void onlyCurrentAssigneeCanInitiate() {
     LegalTicket ticket = newTicket(10L);
     ApiException ex = assertThrows(ApiException.class,

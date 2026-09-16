@@ -77,7 +77,10 @@ public class TicketService {
     if (request.toAssigneeId() == null) {
       throw new ApiException(ErrorCode.VALIDATION_FAILED, "缺少接手处理人");
     }
-    if (request.fromAssigneeId() != null && !Objects.equals(request.fromAssigneeId(), ticket.getAssigneeId())) {
+    if (request.fromAssigneeId() == null) {
+      throw new ApiException(ErrorCode.VALIDATION_FAILED, "缺少当前处理人身份");
+    }
+    if (!Objects.equals(request.fromAssigneeId(), ticket.getAssigneeId())) {
       throw new ApiException(ErrorCode.NOT_CURRENT_ASSIGNEE, "只有当前处理人可以发起转派");
     }
     if (Objects.equals(request.toAssigneeId(), ticket.getAssigneeId())) {
@@ -103,9 +106,12 @@ public class TicketService {
 
   public synchronized TicketTransfer acceptTransfer(Long ticketId, TransferAcceptRequest request) {
     LegalTicket ticket = requireTicket(ticketId);
+    if (request.assigneeId() == null) {
+      throw new ApiException(ErrorCode.VALIDATION_FAILED, "缺少接手人身份");
+    }
     TicketTransfer latest = latestTransferOf(ticketId);
     if (latest != null && TransferStatus.ACCEPTED.name().equals(latest.getStatus())) {
-      if (request.assigneeId() != null && !Objects.equals(request.assigneeId(), latest.getToAssigneeId())) {
+      if (!Objects.equals(request.assigneeId(), latest.getToAssigneeId())) {
         throw new ApiException(ErrorCode.NOT_TRANSFER_TARGET, "转派已由其他处理人接手，归属不可改动");
       }
       return latest;
@@ -116,7 +122,7 @@ public class TicketService {
     if (latest == null || !TransferStatus.PENDING.name().equals(latest.getStatus())) {
       throw new ApiException(ErrorCode.TRANSFER_NOT_FOUND, "工单没有待接手的转派");
     }
-    if (request.assigneeId() != null && !Objects.equals(request.assigneeId(), latest.getToAssigneeId())) {
+    if (!Objects.equals(request.assigneeId(), latest.getToAssigneeId())) {
       throw new ApiException(ErrorCode.NOT_TRANSFER_TARGET, "只有指定处理人可以接手该转派");
     }
     latest.setStatus(TransferStatus.ACCEPTED.name());

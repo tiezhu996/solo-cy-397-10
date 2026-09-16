@@ -97,6 +97,44 @@ class TicketControllerTest {
   }
 
   @Test
+  void missingIdentityRequestsFailWithoutSideEffects() throws Exception {
+    long ticketId = createTicket(10L);
+
+    // 发起转派缺少当前处理人身份：明确失败，不新增转派记录
+    mockMvc.perform(post("/api/tickets/{id}/transfers", ticketId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"toAssigneeId\":20}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    mockMvc.perform(get("/api/tickets/{id}/transfers", ticketId))
+        .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(0)));
+
+    // 正确身份发起成功
+    mockMvc.perform(post("/api/tickets/{id}/transfers", ticketId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"fromAssigneeId\":10,\"toAssigneeId\":20}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("PENDING"));
+
+    // 接手缺少接手人身份：明确失败，责任人与待办不变
+    mockMvc.perform(post("/api/tickets/{id}/transfers/accept", ticketId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    mockMvc.perform(get("/api/tickets/{id}", ticketId))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeId").value(10));
+    mockMvc.perform(get("/api/tickets/todo").param("assigneeId", "10"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
+    mockMvc.perform(get("/api/tickets/todo").param("assigneeId", "20"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(0)));
+    mockMvc.perform(get("/api/tickets/{id}/transfers", ticketId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$", hasSize(1)))
+        .andExpect(jsonPath("$[0].status").value("PENDING"));
+  }
+
+  @Test
   void closeThenAcceptFailsCleanly() throws Exception {
     long ticketId = createTicket(10L);
     mockMvc.perform(post("/api/tickets/{id}/transfers", ticketId)
