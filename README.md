@@ -13,6 +13,7 @@ docker compose up -d --build
 - 根据变量生成纯文本/HTML 合同，并预留 wkhtmltopdf 导出 PDF。
 - 合同状态支持草稿、待签署、已签署、已过期。
 - 法律工单提交、分配、回复和关闭。
+- 工单处理人转派：当前处理人发起、指定处理人接手，同一工单仅允许一个待接手转派，转派记录与归属可回读。
 - 法律 FAQ 分类维护与关键词搜索。
 - 用户合同库与模板收藏。
 
@@ -54,6 +55,11 @@ mvn spring-boot:run
 - `GET /api/contracts` 用户合同库
 - `POST /api/tickets` 提交法律工单
 - `POST /api/tickets/{id}/replies` 添加工单回复
+- `GET /api/tickets/{id}` 工单详情（含当前处理人）
+- `GET /api/tickets/todo?assigneeId=` 处理人待办列表
+- `POST /api/tickets/{id}/transfers` 发起工单转派
+- `POST /api/tickets/{id}/transfers/accept` 接手工单转派
+- `GET /api/tickets/{id}/transfers` 转派记录回读
 - `GET /api/knowledge` 搜索法律 FAQ
 
 ## 环境变量说明

@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 public class LegalTicket {
   private Long id;
   private Long userId;
+  private Long assigneeId;
   private String type;
   private String description;
   private String status;
@@ -15,6 +16,8 @@ public class LegalTicket {
   public void setId(Long id) { this.id = id; }
   public Long getUserId() { return userId; }
   public void setUserId(Long userId) { this.userId = userId; }
+  public Long getAssigneeId() { return assigneeId; }
+  public void setAssigneeId(Long assigneeId) { this.assigneeId = assigneeId; }
   public String getType() { return type; }
   public void setType(String type) { this.type = type; }
   public String getDescription() { return description; }
